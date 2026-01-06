@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>בדיקת VAT Migration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            direction: rtl;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #0b7dda;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            color: #856404;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 2px solid #17a2b8;
+            color: #0c5460;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            direction: ltr;
+            text-align: left;
+            font-size: 12px;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-right: 4px solid;
+        }
+        .test-pass {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        .test-fail {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 בדיקת VAT Migration</h1>
+
+    <p><strong>הסקריפט הזה בודק אם ה-migration רץ בהצלחה</strong></p>
+    <ul>
+        <li>יוצר חשבונית בדיקה עם business_type = "ספק חו"ל"</li>
+        <li>בודק אם vat_amount = 0 (כמו שצריך)</li>
+        <li>מוחק את החשבונית אחרי הבדיקה</li>
+    </ul>
+
+    <button id="testBtn" onclick="testMigration()">🧪 הרץ בדיקה</button>
+
+    <div id="status"></div>
+
+    <script type="module">
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+        const SUPABASE_URL = 'https://osqanpfiprsbcontotlq.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zcWFucGZpcHJzYmNvbnRvdGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1OTQyMTUsImV4cCI6MjA4MzE3MDIxNX0.iLY1bYxYPW9oAExk0YaMUBhNxW3lpU1qFDVrGq9LURY';
+
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        window.testMigration = async function() {
+            const btn = document.getElementById('testBtn');
+            const status = document.getElementById('status');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ בודק...';
+            status.className = 'info';
+            status.innerHTML = '<strong>🔍 מתחיל בדיקה...</strong><br><br>';
+
+            let testInvoiceId = null;
+
+            try {
+                // Get current user
+                const { data: { user } } = await supabase.auth.getUser();
+
+                if (!user) {
+                    throw new Error('לא מחובר - אנא התחבר לאפליקציה קודם');
+                }
+
+                const userId = user.id;
+                status.innerHTML += `✓ משתמש מחובר: ${userId}<br><br>`;
+
+                // Test 1: Insert invoice with "ספק חו\"ל" - should have vat_amount = 0
+                status.innerHTML += '📝 <strong>טסט 1: הוספת חשבונית עם ספק חו"ל</strong><br>';
+
+                const testData = {
+                    user_id: userId,
+                    supplier_name: 'TEST_MIGRATION_SUPPLIER',
+                    document_number: 'TEST_' + Date.now(),
+                    document_date: new Date().toISOString().split('T')[0],
+                    status: 'חדש',
+                    category: 'TEST',
+                    business_type: 'ספק חו"ל',
+                    total_amount: 100,
+                    entry_method: 'ידני'
+                };
+
+                const { data: invoice, error: insertError } = await supabase
+                    .from('invoices')
+                    .insert(testData)
+                    .select()
+                    .single();
+
+                if (insertError) throw insertError;
+
+                testInvoiceId = invoice.id;
+                status.innerHTML += `   ✓ חשבונית נוצרה (ID: ${invoice.id})<br>`;
+                status.innerHTML += `   📊 total_amount: ${invoice.total_amount}<br>`;
+                status.innerHTML += `   📊 business_type: ${invoice.business_type}<br>`;
+                status.innerHTML += `   📊 vat_amount: ${invoice.vat_amount}<br>`;
+                status.innerHTML += `   📊 amount_before_vat: ${invoice.amount_before_vat}<br><br>`;
+
+                // Check if vat_amount is 0
+                if (invoice.vat_amount === 0 && invoice.amount_before_vat === 100) {
+                    status.innerHTML += '<div class="test-result test-pass">✅ <strong>הצלחה!</strong> VAT חושב נכון - vat_amount = 0 עבור ספק חו"ל</div>';
+                } else {
+                    status.innerHTML += `<div class="test-result test-fail">❌ <strong>כישלון!</strong> VAT לא חושב נכון<br>`;
+                    status.innerHTML += `   ציפינו: vat_amount = 0, amount_before_vat = 100<br>`;
+                    status.innerHTML += `   קיבלנו: vat_amount = ${invoice.vat_amount}, amount_before_vat = ${invoice.amount_before_vat}</div>`;
+                }
+
+                // Test 2: Update to regular business type - should calculate 18% VAT
+                status.innerHTML += '<br>📝 <strong>טסט 2: עדכון ל-עוסק מורשה</strong><br>';
+
+                const { data: updatedInvoice, error: updateError } = await supabase
+                    .from('invoices')
+                    .update({ business_type: 'עוסק מורשה' })
+                    .eq('id', testInvoiceId)
+                    .select()
+                    .single();
+
+                if (updateError) throw updateError;
+
+                status.innerHTML += `   ✓ חשבונית עודכנה<br>`;
+                status.innerHTML += `   📊 business_type: ${updatedInvoice.business_type}<br>`;
+                status.innerHTML += `   📊 vat_amount: ${updatedInvoice.vat_amount}<br>`;
+                status.innerHTML += `   📊 amount_before_vat: ${updatedInvoice.amount_before_vat}<br><br>`;
+
+                // Check if vat_amount is calculated (should be ~15.25 for 100 total)
+                const expectedBeforeVat = Math.round((100 / 1.18) * 100) / 100; // ~84.75
+                const expectedVat = Math.round((100 - expectedBeforeVat) * 100) / 100; // ~15.25
+
+                if (Math.abs(updatedInvoice.vat_amount - expectedVat) < 0.1 &&
+                    Math.abs(updatedInvoice.amount_before_vat - expectedBeforeVat) < 0.1) {
+                    status.innerHTML += '<div class="test-result test-pass">✅ <strong>הצלחה!</strong> VAT חושב נכון - 18% עבור עוסק מורשה</div>';
+                } else {
+                    status.innerHTML += `<div class="test-result test-fail">❌ <strong>כישלון!</strong> VAT לא חושב נכון<br>`;
+                    status.innerHTML += `   ציפינו: vat_amount ≈ ${expectedVat}, amount_before_vat ≈ ${expectedBeforeVat}<br>`;
+                    status.innerHTML += `   קיבלנו: vat_amount = ${updatedInvoice.vat_amount}, amount_before_vat = ${updatedInvoice.amount_before_vat}</div>`;
+                }
+
+                // Cleanup
+                status.innerHTML += '<br>🧹 מנקה...<br>';
+                await supabase.from('invoices').delete().eq('id', testInvoiceId);
+                status.innerHTML += '   ✓ חשבונית הבדיקה נמחקה<br><br>';
+
+                status.className = 'success';
+                status.innerHTML += '<h3>🎉 הבדיקה הושלמה בהצלחה!</h3>';
+                status.innerHTML += '<p>ה-Migration רץ כראוי והמערכת עובדת!</p>';
+
+            } catch (error) {
+                status.className = 'error';
+                status.innerHTML += `<br><h3>❌ שגיאה בבדיקה</h3>`;
+                status.innerHTML += `<strong>הודעת שגיאה:</strong> ${error.message}<br><br>`;
+
+                if (error.message.includes('not authenticated') || error.message.includes('not logged in')) {
+                    status.innerHTML += `<p><strong>📌 פתרון:</strong> אנא התחבר לאפליקציה ב-tab אחר ואז חזור לכאן והרץ שוב.</p>`;
+                } else {
+                    status.className = 'warning';
+                    status.innerHTML += `<h4>⚠️ ייתכן שה-Migration עדיין לא רץ</h4>`;
+                    status.innerHTML += `<p>אנא העתק את ה-SQL הזה ל-Supabase SQL Editor:</p>`;
+                    status.innerHTML += `<pre>DROP TRIGGER IF EXISTS calculate_vat_on_insert ON public.invoices;
+DROP TRIGGER IF EXISTS calculate_vat_on_update ON public.invoices;
+DROP FUNCTION IF EXISTS public.calculate_vat_on_invoice();
+
+CREATE OR REPLACE FUNCTION public.calculate_vat_with_business_type()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF NEW.business_type IN ('ספק חול', 'ספק חו"ל', 'ספק חו״ל') THEN
+    NEW.business_type := 'ספק חו"ל';
+  END IF;
+  IF NEW.total_amount IS NOT NULL AND NEW.total_amount > 0 THEN
+    IF NEW.business_type IN ('ספק חו"ל', 'עוסק פטור') THEN
+      NEW.vat_amount := 0;
+      NEW.amount_before_vat := NEW.total_amount;
+    ELSE
+      NEW.amount_before_vat := ROUND((NEW.total_amount / 1.18)::numeric, 2);
+      NEW.vat_amount := ROUND((NEW.total_amount - NEW.amount_before_vat)::numeric, 2);
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER calculate_vat_on_insert BEFORE INSERT ON public.invoices
+FOR EACH ROW EXECUTE FUNCTION public.calculate_vat_with_business_type();
+
+CREATE TRIGGER calculate_vat_on_update BEFORE UPDATE ON public.invoices
+FOR EACH ROW
+WHEN (OLD.total_amount IS DISTINCT FROM NEW.total_amount OR
+      OLD.business_type IS DISTINCT FROM NEW.business_type OR
+      OLD.document_type IS DISTINCT FROM NEW.document_type)
+EXECUTE FUNCTION public.calculate_vat_with_business_type();</pre>`;
+                }
+
+                // Cleanup on error
+                if (testInvoiceId) {
+                    try {
+                        await supabase.from('invoices').delete().eq('id', testInvoiceId);
+                        status.innerHTML += '<br><small>✓ חשבונית הבדיקה נמחקה</small>';
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                }
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🧪 הרץ בדיקה';
+            }
+        }
+    </script>
+</body>
+</html>

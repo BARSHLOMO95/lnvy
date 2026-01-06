@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הרצת Migration - VAT Logic</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            direction: rtl;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            direction: ltr;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 הרצת Migration - VAT Logic</h1>
+
+    <p><strong>מה הסקריפט הזה עושה?</strong></p>
+    <ul>
+        <li>מוחק את ה-triggers הישנים</li>
+        <li>יוצר trigger חדש שמטפל ב-VAT בהתאם ל-business_type</li>
+        <li>מפעיל אוטומטית חישוב VAT בכל INSERT/UPDATE</li>
+    </ul>
+
+    <button id="runBtn" onclick="runMigration()">▶ הרץ Migration</button>
+
+    <div id="status"></div>
+
+    <script type="module">
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+        const SUPABASE_URL = 'https://osqanpfiprsbcontotlq.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zcWFucGZpcHJzYmNvbnRvdGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1OTQyMTUsImV4cCI6MjA4MzE3MDIxNX0.iLY1bYxYPW9oAExk0YaMUBhNxW3lpU1qFDVrGq9LURY';
+
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        window.runMigration = async function() {
+            const btn = document.getElementById('runBtn');
+            const status = document.getElementById('status');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ מריץ...';
+            status.className = 'info';
+            status.innerHTML = '<strong>מתחיל הרצת migration...</strong>';
+
+            try {
+                // Step 1: Drop old triggers
+                status.innerHTML += '<br>🔧 מוחק triggers ישנים...';
+
+                const dropSQL = `
+                    DROP TRIGGER IF EXISTS calculate_vat_on_insert ON public.invoices;
+                    DROP TRIGGER IF EXISTS calculate_vat_on_update ON public.invoices;
+                    DROP FUNCTION IF EXISTS public.calculate_vat_on_invoice();
+                `;
+
+                // Note: We can't run DDL directly from browser with anon key
+                // This is a limitation - we need service role key or SQL Editor access
+
+                status.className = 'error';
+                status.innerHTML = `
+                    <h3>⚠️ לא ניתן להריץ מהדפדפן</h3>
+                    <p>Supabase לא מאפשר הרצת DDL (CREATE/DROP) עם anon key מטעמי אבטחה.</p>
+                    <h4>📋 פתרון: העתק את ה-SQL הזה ל-Supabase Dashboard:</h4>
+                    <ol>
+                        <li>לך ל-<a href="https://supabase.com/dashboard" target="_blank">Supabase Dashboard</a></li>
+                        <li>התחבר עם החשבון שלך</li>
+                        <li>בחר את הפרויקט (אם תראה אותו)</li>
+                        <li>לך ל-SQL Editor</li>
+                        <li>העתק והדבק את ה-SQL למטה</li>
+                        <li>לחץ Run</li>
+                    </ol>
+                    <h4>SQL להעתקה:</h4>
+                    <pre>-- Drop existing VAT triggers and function
+DROP TRIGGER IF EXISTS calculate_vat_on_insert ON public.invoices;
+DROP TRIGGER IF EXISTS calculate_vat_on_update ON public.invoices;
+DROP FUNCTION IF EXISTS public.calculate_vat_on_invoice();
+
+-- Create improved function to calculate VAT with business_type awareness
+CREATE OR REPLACE FUNCTION public.calculate_vat_with_business_type()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  -- Normalize business_type variants for foreign supplier
+  IF NEW.business_type IN ('ספק חול', 'ספק חו"ל', 'ספק חו״ל') THEN
+    NEW.business_type := 'ספק חו"ל';
+  END IF;
+
+  -- Calculate VAT based on business_type
+  IF NEW.total_amount IS NOT NULL AND NEW.total_amount > 0 THEN
+    IF NEW.business_type IN ('ספק חו"ל', 'עוסק פטור') THEN
+      NEW.vat_amount := 0;
+      NEW.amount_before_vat := NEW.total_amount;
+    ELSE
+      NEW.amount_before_vat := ROUND((NEW.total_amount / 1.18)::numeric, 2);
+      NEW.vat_amount := ROUND((NEW.total_amount - NEW.amount_before_vat)::numeric, 2);
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+-- Create trigger for INSERT
+CREATE TRIGGER calculate_vat_on_insert
+BEFORE INSERT ON public.invoices
+FOR EACH ROW
+EXECUTE FUNCTION public.calculate_vat_with_business_type();
+
+-- Create trigger for UPDATE
+CREATE TRIGGER calculate_vat_on_update
+BEFORE UPDATE ON public.invoices
+FOR EACH ROW
+WHEN (
+  OLD.total_amount IS DISTINCT FROM NEW.total_amount OR
+  OLD.business_type IS DISTINCT FROM NEW.business_type OR
+  OLD.document_type IS DISTINCT FROM NEW.document_type
+)
+EXECUTE FUNCTION public.calculate_vat_with_business_type();</pre>
+                `;
+
+            } catch (error) {
+                status.className = 'error';
+                status.innerHTML = `<strong>❌ שגיאה:</strong> ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '▶ הרץ Migration';
+            }
+        }
+    </script>
+</body>
+</html>

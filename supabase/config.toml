@@ -1,0 +1,4 @@
+project_id = "osqanpfiprsbcontotlq"
+
+[functions.import-invoices]
+verify_jwt = false
