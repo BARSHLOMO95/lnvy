@@ -264,6 +264,10 @@ const Dashboard = () => {
                 <RefreshCw className="h-4 w-4 sm:ml-2" />
                 <span className="hidden sm:inline">רענן</span>
               </Button>
+              <Button variant="outline" size="sm" onClick={() => window.location.href = '/settings'} className="flex-row-reverse px-2 sm:px-3">
+                <Settings className="h-4 w-4 sm:ml-2" />
+                <span className="hidden sm:inline">הגדרות</span>
+              </Button>
               <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground flex-row-reverse px-2 sm:px-3">
                 <LogOut className="h-4 w-4 sm:ml-2" />
                 <span className="hidden sm:inline">{user?.email?.split('@')[0]}</span>
