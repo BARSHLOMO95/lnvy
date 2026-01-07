@@ -18,7 +18,7 @@ interface GmailStatus {
 }
 
 const Settings = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [gmailStatus, setGmailStatus] = useState<GmailStatus>({
     connected: false,
@@ -31,12 +31,14 @@ const Settings = () => {
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return; // Wait for auth to load
+
     if (!user) {
       navigate('/auth');
       return;
     }
     fetchGmailStatus();
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   const fetchGmailStatus = async () => {
     try {
@@ -131,7 +133,7 @@ const Settings = () => {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
