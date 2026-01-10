@@ -1,0 +1,45 @@
+name: Deploy Supabase Functions
+
+on:
+  push:
+    branches:
+      - main
+      - claude/**
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: lqbkdrwgxvoxrtlexokh
+        run: |
+          supabase link --project-ref $SUPABASE_PROJECT_ID
+          supabase functions deploy gmail-oauth-callback --no-verify-jwt
+          supabase functions deploy gmail-sync --no-verify-jwt
+          supabase functions deploy classify-document --no-verify-jwt
+
+      - name: Deployment Summary
+        run: |
+          echo "✅ Deployed 3 Edge Functions successfully!"
+          echo "- gmail-oauth-callback"
+          echo "- gmail-sync"
+          echo "- classify-document"
