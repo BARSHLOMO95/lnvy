@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useInvoices } from '@/hooks/useInvoices';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import { LogOut, Plus, Loader2, Upload, RefreshCw, Settings } from 'lucide-react
 import { toast } from 'sonner';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const {
     invoices,
@@ -263,6 +265,10 @@ const Dashboard = () => {
               <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="flex-row-reverse px-2 sm:px-3">
                 <RefreshCw className="h-4 w-4 sm:ml-2" />
                 <span className="hidden sm:inline">רענן</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate('/settings')} className="flex-row-reverse px-2 sm:px-3">
+                <Settings className="h-4 w-4 sm:ml-2" />
+                <span className="hidden sm:inline">הגדרות</span>
               </Button>
               <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground flex-row-reverse px-2 sm:px-3">
                 <LogOut className="h-4 w-4 sm:ml-2" />
