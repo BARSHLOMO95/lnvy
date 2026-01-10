@@ -66,13 +66,15 @@ const Settings = () => {
   };
 
   const handleConnectGmail = () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-oauth-callback`;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+    const redirectUri = `${supabaseUrl}/functions/v1/gmail-oauth-callback`;
 
     console.log('🔍 Debug OAuth:', {
       clientId,
       redirectUri,
-      supabaseUrl: import.meta.env.VITE_SUPABASE_URL
+      supabaseUrl,
+      rawSupabaseUrl: import.meta.env.VITE_SUPABASE_URL
     });
 
     if (!clientId || clientId === 'undefined') {
