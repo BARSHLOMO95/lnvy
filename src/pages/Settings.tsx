@@ -69,6 +69,17 @@ const Settings = () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-oauth-callback`;
 
+    console.log('🔍 Debug OAuth:', {
+      clientId,
+      redirectUri,
+      supabaseUrl: import.meta.env.VITE_SUPABASE_URL
+    });
+
+    if (!clientId || clientId === 'undefined') {
+      toast.error('Google Client ID לא מוגדר. בדוק את משתני הסביבה ב-Vercel.');
+      return;
+    }
+
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     authUrl.searchParams.append('client_id', clientId);
     authUrl.searchParams.append('redirect_uri', redirectUri);
@@ -77,6 +88,8 @@ const Settings = () => {
     authUrl.searchParams.append('access_type', 'offline');
     authUrl.searchParams.append('prompt', 'consent');
     authUrl.searchParams.append('state', user?.id || '');
+
+    console.log('🔗 OAuth URL:', authUrl.toString());
 
     window.location.href = authUrl.toString();
   };
